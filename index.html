@@ -13,7 +13,7 @@
 </head>
 <body>
   <div class="shell">
-    <header class="top"><div class="brand"><span class="brand-icon" aria-hidden="true">✦</span><span>气瓶色彩大冒险</span></div><div class="audio-controls"><button type="button" class="audio-button" id="sfxButton" aria-pressed="true">🔊 音效开</button><button type="button" class="audio-button" id="musicButton" aria-pressed="false">🎵 音乐关</button></div></header>
+    <header class="top"><div class="brand"><span class="brand-icon" aria-hidden="true">✦</span><span>气瓶色彩大冒险</span></div><div class="audio-controls"><button type="button" class="audio-button" id="sfxButton" aria-pressed="true">🔊 音效开</button><button type="button" class="audio-button" id="musicButton" aria-pressed="true">🎵 音乐开</button></div></header>
     <div class="layout">
       <aside class="panel sidebar" aria-label="关卡导航">
         <span class="eyebrow">SELECT LEVEL</span><h2 class="side-title">冒险地图 🗺️</h2><p class="side-copy">三关记住瓶身、标字与横条颜色。题目和选项随机出现。答错或超时的题会在本轮结束后重出。</p>
@@ -231,14 +231,33 @@
       else renderCompletion();
     }
     function renderGuide(){gases.forEach(g=>{let tr=document.createElement('tr');[g.name,g.body,g.word,g.label,g.stripe].forEach((v,i)=>{let td=document.createElement('td');if(i===1||i===3||i===4){if(v!=='无横条'){let s=document.createElement('span');s.className='swatch';s.style.setProperty('--swatch',colors[v]);td.append(s)}}td.append(document.createTextNode(v));tr.append(td)});$('guideRows').append(tr)})}
-    let audioContext=null,musicTimer=null,musicStep=0,sfxOn=true,musicOn=false;
+    let audioContext=null,musicTimer=null,musicStep=0,sfxOn=true,musicOn=true;
     const melody=[523,659,784,659,587,698,880,698,659,784,988,784,587,698,784,0];
-    function getAudio(){try{audioContext??=new (window.AudioContext||window.webkitAudioContext)();if(audioContext.state==='suspended')audioContext.resume();return audioContext}catch{return null}}
+    function getAudio(){try{audioContext??=new (window.AudioContext||window.webkitAudioContext)();if(audioContext.state==='suspended')audioContext.resume().catch(()=>{});return audioContext}catch{return null}}
     function tone(frequency,duration,volume=0.035,delay=0){if(!frequency)return;const ctx=getAudio();if(!ctx)return;const osc=ctx.createOscillator(),gain=ctx.createGain(),start=ctx.currentTime+delay;osc.type='square';osc.frequency.setValueAtTime(frequency,start);gain.gain.setValueAtTime(0.0001,start);gain.gain.exponentialRampToValueAtTime(volume,start+0.015);gain.gain.exponentialRampToValueAtTime(0.0001,start+duration);osc.connect(gain).connect(ctx.destination);osc.start(start);osc.stop(start+duration+0.02)}
     function playAnswerSound(ok){if(!sfxOn)return;if(ok){tone(660,0.13,0.055);tone(880,0.18,0.055,0.12)}else{tone(330,0.17,0.04);tone(220,0.22,0.04,0.14)}}
     function musicTick(){if(document.hidden||!musicOn)return;const note=melody[musicStep++%melody.length];tone(note,0.16,0.012);if(musicStep%4===1)tone(131,0.08,0.008)}
     $('sfxButton').addEventListener('click',()=>{sfxOn=!sfxOn;$('sfxButton').textContent=sfxOn?'🔊 音效开':'🔇 音效关';$('sfxButton').setAttribute('aria-pressed',String(sfxOn));if(sfxOn)tone(740,0.1,0.035)});
-    $('musicButton').addEventListener('click',()=>{musicOn=!musicOn;$('musicButton').textContent=musicOn?'🎵 音乐开':'🎵 音乐关';$('musicButton').setAttribute('aria-pressed',String(musicOn));if(musicOn){getAudio();musicStep=0;musicTick();musicTimer=setInterval(musicTick,230)}else{clearInterval(musicTimer);musicTimer=null}});
+    function startMusic() {
+      if (!musicOn || musicTimer !== null || !getAudio()) return;
+      musicStep = 0;
+      musicTick();
+      musicTimer = setInterval(musicTick, 230);
+    }
+
+    $('musicButton').addEventListener('click', () => {
+      musicOn = !musicOn;
+      $('musicButton').textContent = musicOn ? '🎵 音乐开' : '🎵 音乐关';
+      $('musicButton').setAttribute('aria-pressed', String(musicOn));
+      if (musicOn) {
+        startMusic();
+      } else {
+        clearInterval(musicTimer);
+        musicTimer = null;
+      }
+    });
+    document.addEventListener('click', startMusic, { once: true });
+    document.addEventListener('keydown', startMusic, { once: true });
 
     function renderRank(){let records=[];try{records=JSON.parse(localStorage.getItem('gas-bottle-ranking-v1')||'[]')}catch{}$('rankList').innerHTML='';if(!records.length){$('rankList').textContent='还没有通关记录，来拿下第一个名次吧！';return}records.sort((a,b)=>a.mistakes-b.mistakes||a.elapsed-b.elapsed).slice(0,10).forEach((r,i)=>{const row=document.createElement('div');row.className='rank-row';const place=document.createElement('strong'),name=document.createElement('span'),score=document.createElement('span');place.textContent=`#${i+1}`;name.textContent=r.name;score.textContent=`失误 ${r.mistakes} · ${Math.floor(r.elapsed/60)}分${r.elapsed%60}秒`;row.append(place,name,score);$('rankList').append(row)})}
     $('saveRecord').addEventListener('click',()=>{if(state.level!==2||state.score!==27||state.recorded)return;const name=$('playerName').value.trim().slice(0,12)||'匿名冒险家';let records=[];try{records=JSON.parse(localStorage.getItem('gas-bottle-ranking-v1')||'[]')}catch{}records.push({name,mistakes:state.mistakes,elapsed:state.elapsed});localStorage.setItem('gas-bottle-ranking-v1',JSON.stringify(records.sort((a,b)=>a.mistakes-b.mistakes||a.elapsed-b.elapsed).slice(0,20)));state.recorded=true;persist();$('recordMessage').textContent='成绩已记入本机排行榜！';$('recordForm').classList.add('hidden');renderRank()});
